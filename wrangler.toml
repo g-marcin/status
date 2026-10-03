@@ -1,0 +1,16 @@
+name = "status"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# workers.dev URL for now; status.mgrzmil.dev custom domain in phase 2
+workers_dev = true
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "STATUS"
+id = "a9de89264f11433da487662779eecbc6"
+
+[observability]
+enabled = true

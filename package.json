@@ -1,13 +1,19 @@
 {
   "name": "status",
-  "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "wrangler dev --test-scheduled",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "tail": "wrangler tail",
+    "state": "wrangler kv key get state --binding STATUS --remote"
+  },
   "devDependencies": {
     "@types/bun": "latest",
+    "typescript": "^7.0.2",
     "wrangler": "^4.147.0"
-  },
-  "peerDependencies": {
-    "typescript": "^5"
   }
 }

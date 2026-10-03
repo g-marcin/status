@@ -5,9 +5,7 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
-    "jsx": "react-jsx",
-    "allowJs": true,
-    "types": ["bun"],
+            "types": ["./worker-configuration.d.ts", "bun"],
 
     // Bundler mode
     "moduleResolution": "bundler",
