@@ -34,8 +34,18 @@ export const RECENT_MAX = 288; // 24h at 5 min
 export const DAYS_MAX = 90;
 
 export function classify(ok: boolean, ms: number, degradedMs: number, err?: string): CheckResult {
-  if (!ok) return { status: "down", ms, err: err ?? "check failed" };
+  if (!ok) return { status: "down", ms, err: err || "check failed" };
   return { status: ms > degradedMs ? "degraded" : "up", ms };
+}
+
+// Turns anything thrown into a non-empty message. Never throws.
+export function errorMessage(e: unknown): string {
+  try {
+    const msg = e instanceof Error ? e.message || e.name : String(e);
+    return msg || "check failed";
+  } catch {
+    return "check failed";
+  }
 }
 
 export function emptyState(): State {

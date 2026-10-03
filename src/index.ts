@@ -1,4 +1,4 @@
-import { applyResults, classify, emptyState, type CheckResult, type State } from "./lib";
+import { applyResults, classify, emptyState, errorMessage, type CheckResult, type State } from "./lib";
 
 const STATE_KEY = "state";
 const TIMEOUT_MS = 8000;
@@ -8,14 +8,23 @@ interface Check {
   run: () => Promise<CheckResult>;
 }
 
-async function timed<T>(fn: () => Promise<T>): Promise<{ value?: T; ms: number; err?: string }> {
-  const start = Date.now();
-  try {
-    const value = await fn();
-    return { value, ms: Date.now() - start };
-  } catch (e) {
-    return { ms: Date.now() - start, err: e instanceof Error ? e.message : String(e) };
-  }
+// A probe returns an error message, or undefined when healthy.
+type Probe = () => Promise<string | undefined>;
+
+function check(id: string, degradedMs: number, probe: Probe): Check {
+  return {
+    id,
+    run: async () => {
+      const start = Date.now();
+      let err: string | undefined;
+      try {
+        err = await probe();
+      } catch (e) {
+        err = errorMessage(e);
+      }
+      return classify(err === undefined, Date.now() - start, degradedMs, err);
+    },
+  };
 }
 
 function get(url: string): Promise<Response> {
@@ -26,65 +35,62 @@ function get(url: string): Promise<Response> {
   });
 }
 
-// validate returns an error message, or undefined when the response is healthy
 function httpCheck(
   id: string,
   url: string,
   degradedMs: number,
   validate?: (res: Response) => Promise<string | undefined>,
 ): Check {
-  return {
-    id,
-    run: async () => {
-      const r = await timed(async () => {
-        const res = await get(url);
-        if (!res.ok) return `HTTP ${res.status}`;
-        return validate ? await validate(res) : (await res.body?.cancel(), undefined);
-      });
-      const err = r.err ?? r.value;
-      return classify(!err, r.ms, degradedMs, err);
-    },
-  };
+  return check(id, degradedMs, async () => {
+    const res = await get(url);
+    if (!res.ok) return `HTTP ${res.status}`;
+    if (validate) return validate(res);
+    await res.body?.cancel();
+    return undefined;
+  });
 }
 
-const checks: Check[] = [
-  httpCheck("site", "https://mgrzmil.dev/", 2000),
-  httpCheck("app", "https://app.mgrzmil.dev/", 2000),
-  httpCheck("api", "https://api.mgrzmil.dev/healthcheck", 1500, async (res) => {
-    const body = await res.json<{ status?: string }>();
-    return body.status === "success" ? undefined : `status=${body.status}`;
-  }),
-  httpCheck("cdn", "https://cdn.mgrzmil.dev/health", 1500, async (res) => {
-    const body = await res.json<{ assets_exists?: boolean }>();
-    return body.assets_exists ? undefined : "assets dir missing";
-  }),
-  {
-    id: "e2e",
-    run: async () => {
-      const r = await timed(async () => {
-        const apiRes = await get("https://api.mgrzmil.dev/breeds/image/random");
-        if (!apiRes.ok) return `api HTTP ${apiRes.status}`;
-        const { message } = await apiRes.json<{ message?: string }>();
-        if (!message) return "api returned no image url";
-        const img = await get(message);
-        await img.body?.cancel();
-        if (!img.ok) return `image HTTP ${img.status}`;
-        if (!img.headers.get("content-type")?.startsWith("image/")) return "not an image";
-        return undefined;
-      });
-      const err = r.err ?? r.value;
-      return classify(!err, r.ms, 3000, err);
-    },
-  },
-];
+function buildChecks(env: Env): Check[] {
+  return [
+    httpCheck("site", env.SITE_URL, 2000),
+    httpCheck("app", env.APP_URL, 2000),
+    httpCheck("api", `${env.API_URL}/healthcheck`, 1500, async (res) => {
+      const body = await res.json<{ status?: string }>();
+      return body.status === "success" ? undefined : `status=${body.status}`;
+    }),
+    httpCheck("cdn", `${env.CDN_URL}/health`, 1500, async (res) => {
+      const body = await res.json<{ assets_exists?: boolean }>();
+      return body.assets_exists ? undefined : "assets dir missing";
+    }),
+    // End-to-end: API returns an image URL, and that image actually loads.
+    check("e2e", 3000, async () => {
+      const apiRes = await get(`${env.API_URL}/breeds/image/random`);
+      if (!apiRes.ok) return `api HTTP ${apiRes.status}`;
+      const { message: imageUrl } = await apiRes.json<{ message?: string }>();
+      if (!imageUrl) return "api returned no image url";
+
+      const img = await get(imageUrl);
+      await img.body?.cancel();
+      if (!img.ok) return `image HTTP ${img.status}`;
+      if (!img.headers.get("content-type")?.startsWith("image/")) return "not an image";
+      return undefined;
+    }),
+  ];
+}
 
 async function runChecks(env: Env): Promise<State> {
-  const settled = await Promise.allSettled(checks.map((c) => c.run()));
-  const results: Record<string, CheckResult> = {};
-  checks.forEach((c, i) => {
-    const s = settled[i]!;
-    results[c.id] = s.status === "fulfilled" ? s.value : { status: "down", ms: 0, err: String(s.reason) };
-  });
+  const checks = buildChecks(env);
+  // One failing check must not drop the whole run's sample.
+  const entries = await Promise.all(
+    checks.map(async (c): Promise<[string, CheckResult]> => {
+      try {
+        return [c.id, await c.run()];
+      } catch (e) {
+        return [c.id, { status: "down", ms: 0, err: errorMessage(e) }];
+      }
+    }),
+  );
+  const results = Object.fromEntries(entries);
 
   const state = (await env.STATUS.get<State>(STATE_KEY, "json")) ?? emptyState();
   applyResults(state, results, new Date());
@@ -93,7 +99,7 @@ async function runChecks(env: Env): Promise<State> {
 }
 
 export default {
-  async scheduled(_controller, env, ctx) {
+  scheduled(_controller, env, ctx) {
     ctx.waitUntil(runChecks(env));
   },
 

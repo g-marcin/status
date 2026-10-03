@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyResults, classify, DAYS_MAX, emptyState, RECENT_MAX } from "./lib";
+import { applyResults, classify, DAYS_MAX, emptyState, errorMessage, RECENT_MAX } from "./lib";
 
 describe("classify", () => {
   test("ok and fast is up", () => {
@@ -10,6 +10,25 @@ describe("classify", () => {
   });
   test("not ok is down with error", () => {
     expect(classify(false, 50, 1500, "HTTP 502")).toEqual({ status: "down", ms: 50, err: "HTTP 502" });
+  });
+});
+
+describe("errorMessage", () => {
+  test("uses Error message", () => {
+    expect(errorMessage(new Error("boom"))).toBe("boom");
+  });
+  test("empty message falls back to error name", () => {
+    expect(errorMessage(new TypeError(""))).toBe("TypeError");
+  });
+  test("empty string and unstringifiable values fall back", () => {
+    expect(errorMessage("")).toBe("check failed");
+    expect(errorMessage(Object.create(null))).toBe("check failed");
+  });
+});
+
+describe("classify empty error", () => {
+  test("empty error string is still down with a message", () => {
+    expect(classify(false, 10, 1500, "")).toEqual({ status: "down", ms: 10, err: "check failed" });
   });
 });
 

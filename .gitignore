@@ -36,3 +36,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # wrangler
 .wrangler
 .dev.vars*
+
+# private notes (lists infra weak spots, repo is public)
+NOTES.md

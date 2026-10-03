@@ -14,3 +14,14 @@ id = "a9de89264f11433da487662779eecbc6"
 
 [observability]
 enabled = true
+
+# Status page; /api/status falls through to the Worker
+[assets]
+directory = "./public"
+
+# Check targets. API_URL and CDN_URL are bases without trailing slash.
+[vars]
+SITE_URL = "https://mgrzmil.dev/"
+APP_URL = "https://app.mgrzmil.dev/"
+API_URL = "https://api.mgrzmil.dev"
+CDN_URL = "https://cdn.mgrzmil.dev"
