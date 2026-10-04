@@ -2,8 +2,9 @@ name = "status"
 main = "src/index.ts"
 compatibility_date = "2026-09-01"
 
-# workers.dev URL for now; status.mgrzmil.dev custom domain in phase 2
-workers_dev = true
+# Served only on the custom domain; Wrangler creates the DNS record and cert on deploy.
+workers_dev = false
+routes = [{ pattern = "status.mgrzmil.dev", custom_domain = true }]
 
 [triggers]
 crons = ["*/5 * * * *"]
