@@ -1,4 +1,4 @@
-import { applyResults, classify, emptyState, errorMessage, type CheckResult, type State } from "./lib";
+import { applyResults, classify, emptyState, publicReason, type CheckResult, type State } from "./lib";
 
 const STATE_KEY = "state";
 const TIMEOUT_MS = 8000;
@@ -20,7 +20,8 @@ function check(id: string, degradedMs: number, probe: Probe): Check {
       try {
         err = await probe();
       } catch (e) {
-        err = errorMessage(e);
+        console.error(`check ${id} failed`, e);
+        err = publicReason(e);
       }
       return classify(err === undefined, Date.now() - start, degradedMs, err);
     },
@@ -56,7 +57,7 @@ function buildChecks(env: Env): Check[] {
     httpCheck("app", env.APP_URL, 2000),
     httpCheck("api", `${env.API_URL}/healthcheck`, 1500, async (res) => {
       const body = await res.json<{ status?: string }>();
-      return body.status === "success" ? undefined : `status=${body.status}`;
+      return body.status === "success" ? undefined : "unhealthy";
     }),
     httpCheck("cdn", `${env.CDN_URL}/health`, 1500, async (res) => {
       const body = await res.json<{ assets_exists?: boolean }>();
@@ -86,7 +87,8 @@ async function runChecks(env: Env): Promise<State> {
       try {
         return [c.id, await c.run()];
       } catch (e) {
-        return [c.id, { status: "down", ms: 0, err: errorMessage(e) }];
+        console.error(`check ${c.id} crashed`, e);
+        return [c.id, { status: "down", ms: 0, err: publicReason(e) }];
       }
     }),
   );

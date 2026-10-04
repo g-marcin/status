@@ -38,14 +38,16 @@ export function classify(ok: boolean, ms: number, degradedMs: number, err?: stri
   return { status: ms > degradedMs ? "degraded" : "up", ms };
 }
 
-// Turns anything thrown into a non-empty message. Never throws.
-export function errorMessage(e: unknown): string {
+// Maps anything thrown to a fixed public reason; raw messages can leak response
+// bodies or internal paths, so they go to logs only. Never throws.
+export function publicReason(e: unknown): string {
   try {
-    const msg = e instanceof Error ? e.message || e.name : String(e);
-    return msg || "check failed";
-  } catch {
-    return "check failed";
-  }
+    const name = (e as { name?: unknown } | null)?.name;
+    if (name === "TimeoutError" || name === "AbortError") return "timeout";
+    if (name === "SyntaxError") return "invalid response";
+    if (name === "TypeError") return "unreachable";
+  } catch {}
+  return "check failed";
 }
 
 export function emptyState(): State {

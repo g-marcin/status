@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { applyResults, classify, DAYS_MAX, emptyState, errorMessage, RECENT_MAX } from "./lib";
+import { applyResults, classify, DAYS_MAX, emptyState, publicReason, RECENT_MAX } from "./lib";
 
 describe("classify", () => {
   test("ok and fast is up", () => {
@@ -13,16 +13,22 @@ describe("classify", () => {
   });
 });
 
-describe("errorMessage", () => {
-  test("uses Error message", () => {
-    expect(errorMessage(new Error("boom"))).toBe("boom");
+describe("publicReason", () => {
+  test("maps known error kinds", () => {
+    expect(publicReason(new DOMException("timed out", "TimeoutError"))).toBe("timeout");
+    expect(publicReason(new DOMException("aborted", "AbortError"))).toBe("timeout");
+    expect(publicReason(new TypeError("fetch failed"))).toBe("unreachable");
   });
-  test("empty message falls back to error name", () => {
-    expect(errorMessage(new TypeError(""))).toBe("TypeError");
+  test("never exposes raw message", () => {
+    let parseErr: unknown;
+    try { JSON.parse("<html>/root/secret</html>"); } catch (e) { parseErr = e; }
+    expect(publicReason(parseErr)).toBe("invalid response");
+    expect(publicReason(new Error("/root/app/server.js crashed"))).toBe("check failed");
   });
-  test("empty string and unstringifiable values fall back", () => {
-    expect(errorMessage("")).toBe("check failed");
-    expect(errorMessage(Object.create(null))).toBe("check failed");
+  test("odd values fall back", () => {
+    expect(publicReason("")).toBe("check failed");
+    expect(publicReason(null)).toBe("check failed");
+    expect(publicReason(Object.create(null))).toBe("check failed");
   });
 });
 
