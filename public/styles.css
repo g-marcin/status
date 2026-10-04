@@ -47,6 +47,7 @@ h2 {
   display: inline-block;
 }
 
+.summary { padding: 1.25rem 2rem; }
 .overall { display: flex; align-items: center; gap: 1rem; }
 .overall .dot { width: 1rem; height: 1rem; flex: none; }
 .overall-text { font-size: 1.1rem; font-weight: 500; }
